@@ -1,0 +1,263 @@
+name: マトリックス戦略 - 並列処理デモ
+
+# マトリックス戦略を使用した並列実行のデモ
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  # マトリックスジョブ: 複数のOS×複数のバージョンで並列実行
+  matrix-test:
+    name: "テスト (${{ matrix.os }}, Python ${{ matrix.python-version }})"
+    runs-on: ${{ matrix.os }}
+
+    # マトリックス定義 - 全ての組み合わせが並列実行される
+    strategy:
+      # fail-fast: falseで、1つ失敗しても他は継続
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        # 3 OS × 4 Python = 12個のジョブが並列実行！
+
+    steps:
+      - name: "チェックアウト"
+        uses: actions/checkout@v4
+
+      - name: "Python ${{ matrix.python-version }} のセットアップ"
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: "環境情報の表示"
+        run: |
+          python --version
+          python -c "import sys; print(f'Python実行パス: {sys.executable}')"
+          python -c "import platform; print(f'プラットフォーム: {platform.platform()}')"
+
+      - name: "テスト実行"
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "OS: ${{ matrix.os }}"
+          echo "Python: ${{ matrix.python-version }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          python -c "
+          import json
+          import sys
+          from datetime import datetime
+
+          result = {
+              'os': '${{ matrix.os }}',
+              'python_version': '${{ matrix.python-version }}',
+              'timestamp': datetime.now().isoformat(),
+              'test_passed': True,
+              'test_count': 42,
+              'duration_ms': 123.45
+          }
+
+          print('✅ テスト完了')
+          print(json.dumps(result, indent=2))
+          "
+
+      - name: "結果ファイル生成"
+        shell: bash
+        run: |
+          mkdir -p test-results
+
+          # OS名を正規化（ファイル名用）
+          OS_NAME="${{ matrix.os }}"
+          OS_CLEAN=$(echo "$OS_NAME" | sed 's/-latest//')
+
+          python -c "
+          import json
+          from datetime import datetime
+
+          result = {
+              'os': '${{ matrix.os }}',
+              'python_version': '${{ matrix.python-version }}',
+              'timestamp': datetime.now().isoformat(),
+              'runner_name': '${{ runner.name }}',
+              'test_results': {
+                  'total': 42,
+                  'passed': 42,
+                  'failed': 0,
+                  'skipped': 0
+              },
+              'status': 'success'
+          }
+
+          with open('test-results/result.json', 'w') as f:
+              json.dump(result, f, indent=2)
+          "
+
+          echo "📁 結果ファイル作成完了: ${OS_CLEAN}-py${{ matrix.python-version }}"
+
+      - name: "アーティファクト保存"
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: test-results/
+
+  # 並列実行の可視化ジョブ
+  visualize-parallel:
+    name: "並列実行の可視化"
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [matrix-test]
+
+    steps:
+      - name: "チェックアウト"
+        uses: actions/checkout@v4
+
+      - name: "全結果のダウンロード"
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
+
+      - name: "統計レポート生成"
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "         マトリックス並列実行 統計レポート"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          total_jobs=0
+          successful_jobs=0
+
+          for dir in all-results/*/; do
+            if [ -f "${dir}result.json" ]; then
+              total_jobs=$((total_jobs + 1))
+
+              # JSONから情報を抽出
+              os=$(python3 -c "import json; data=json.load(open('${dir}result.json')); print(data['os'])")
+              py_ver=$(python3 -c "import json; data=json.load(open('${dir}result.json')); print(data['python_version'])")
+              status=$(python3 -c "import json; data=json.load(open('${dir}result.json')); print(data['status'])")
+
+              if [ "$status" = "success" ]; then
+                successful_jobs=$((successful_jobs + 1))
+                echo "✅ $os - Python $py_ver"
+              else
+                echo "❌ $os - Python $py_ver"
+              fi
+            fi
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 集計結果:"
+          echo "   総ジョブ数: $total_jobs"
+          echo "   成功: $successful_jobs"
+          echo "   失敗: $((total_jobs - successful_jobs))"
+          echo "   成功率: $(python3 -c "print(f'{$successful_jobs/$total_jobs*100:.1f}%')")"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: "マトリックス実行マップの生成"
+        run: |
+          python3 << 'PYTHON_SCRIPT'
+          import os
+          import json
+          from pathlib import Path
+
+          print("🗺️  マトリックス実行マップを生成中...")
+
+          # 全結果を収集
+          results = []
+          results_dir = Path("all-results")
+
+          for result_file in results_dir.glob("*/result.json"):
+              with open(result_file) as f:
+                  results.append(json.load(f))
+
+          # OSとPythonバージョンでグループ化
+          os_list = sorted(set(r['os'] for r in results))
+          py_versions = sorted(set(r['python_version'] for r in results))
+
+          # HTMLレポート生成
+          html = """
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="UTF-8">
+              <title>マトリックス実行結果</title>
+              <style>
+                  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                         padding: 20px; background: #f5f5f5; }
+                  h1 { color: #333; }
+                  table { border-collapse: collapse; background: white;
+                          box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                  th, td { padding: 15px; text-align: center; border: 1px solid #ddd; }
+                  th { background: #2196F3; color: white; font-weight: bold; }
+                  .success { background: #4CAF50; color: white; }
+                  .header-col { background: #1976D2; color: white; font-weight: bold; }
+              </style>
+          </head>
+          <body>
+              <h1>🎯 GitHub Actions マトリックス並列実行マップ</h1>
+              <p>実行時刻: """ + results[0]['timestamp'] + """</p>
+              <table>
+                  <tr>
+                      <th>OS / Python</th>
+          """
+
+          for py_ver in py_versions:
+              html += f"            <th>Python {py_ver}</th>\n"
+
+          html += "        </tr>\n"
+
+          # 各OSの行を作成
+          for os in os_list:
+              os_display = os.replace('-latest', '')
+              html += f"        <tr>\n            <td class='header-col'>{os_display}</td>\n"
+
+              for py_ver in py_versions:
+                  # この組み合わせの結果を検索
+                  result = next((r for r in results
+                               if r['os'] == os and r['python_version'] == py_ver), None)
+
+                  if result and result['status'] == 'success':
+                      html += f"            <td class='success'>✅ 成功</td>\n"
+                  else:
+                      html += "            <td>❌ 失敗</td>\n"
+
+              html += "        </tr>\n"
+
+          html += """
+              </table>
+              <p style='margin-top: 20px; color: #666;'>
+                  💡 全ての組み合わせが並列に実行されました！
+              </p>
+          </body>
+          </html>
+          """
+
+          # HTMLファイルを保存
+          os.makedirs("reports", exist_ok=True)
+          with open("reports/matrix-report.html", "w", encoding="utf-8") as f:
+              f.write(html)
+
+          print("✅ レポート生成完了: reports/matrix-report.html")
+          PYTHON_SCRIPT
+
+      - name: "レポートをアーティファクトとして保存"
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-execution-report
+          path: reports/
+
+      - name: "サマリー作成"
+        run: |
+          echo "## 🎯 マトリックス並列実行完了" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 実行構成" >> $GITHUB_STEP_SUMMARY
+          echo "- **OS**: ubuntu, windows, macos (3種類)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Python**: 3.9, 3.10, 3.11, 3.12 (4バージョン)" >> $GITHUB_STEP_SUMMARY
+          echo "- **総ジョブ数**: 3 × 4 = **12ジョブ**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚡ 並列実行" >> $GITHUB_STEP_SUMMARY
+          echo "全12ジョブが**同時に並列実行**されました！" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 レポート" >> $GITHUB_STEP_SUMMARY
+          echo "詳細な実行マップは `matrix-execution-report` アーティファクトをダウンロードしてご確認ください。" >> $GITHUB_STEP_SUMMARY
+

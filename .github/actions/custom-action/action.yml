@@ -1,0 +1,61 @@
+name: 'カスタムアクション'
+description: 'ジョブ情報を処理するカスタムアクション'
+author: 'サンプル作成者'
+
+# アクションの入力パラメータ
+inputs:
+  job-name:
+    description: 'ジョブ名'
+    required: true
+  message:
+    description: '表示するメッセージ'
+    required: false
+    default: 'デフォルトメッセージ'
+
+# アクションの出力
+outputs:
+  timestamp:
+    description: '実行時刻'
+    value: ${{ steps.process.outputs.timestamp }}
+  status:
+    description: '処理ステータス'
+    value: ${{ steps.process.outputs.status }}
+
+# アクションの実行内容
+runs:
+  using: 'composite'
+  steps:
+    - name: 'カスタム処理実行'
+      id: process
+      shell: bash
+      run: |
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🚀 カスタムアクション実行中..."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "ジョブ名: ${{ inputs.job-name }}"
+        echo "メッセージ: ${{ inputs.message }}"
+        echo "実行時刻: $(date)"
+        echo ""
+
+        # 出力の設定
+        echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+        echo "status=success" >> $GITHUB_OUTPUT
+
+        # 処理結果ファイルの作成
+        mkdir -p output
+        cat > output/custom-action-result.txt << EOF
+        【カスタムアクション実行結果】
+        ジョブ名: ${{ inputs.job-name }}
+        メッセージ: ${{ inputs.message }}
+        実行時刻: $(date)
+        ステータス: ✓ 正常終了
+        EOF
+
+        echo "✅ カスタムアクション完了"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+branding:
+  icon: 'activity'
+  color: 'blue'
+

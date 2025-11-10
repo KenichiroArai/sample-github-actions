@@ -1,0 +1,282 @@
+name: サンプルワークフロー - 並列処理デモ
+
+# ワークフローのトリガー設定
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 手動実行を可能にする
+
+# 環境変数の設定
+env:
+  GLOBAL_VAR: "グローバル環境変数"
+  BUILD_DATE: ${{ github.event.head_commit.timestamp }}
+
+jobs:
+  # ジョブ1: 並列実行される処理A
+  parallel-job-a:
+    name: "並列ジョブA - Linux環境"
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: リポジトリのチェックアウト（公式Action使用）
+      - name: "チェックアウト"
+        uses: actions/checkout@v4
+
+      # Step 2: カスタムスクリプトの実行
+      - name: "処理A - データ生成"
+        run: |
+          echo "=== ジョブA開始 ==="
+          echo "実行時刻: $(date)"
+          echo "ランナーOS: $RUNNER_OS"
+          echo "グローバル変数: $GLOBAL_VAR"
+
+          # 結果ファイルの作成
+          mkdir -p output
+          cat > output/result-a.txt << EOF
+          【ジョブA実行結果】
+          実行時刻: $(date)
+          ランナー: $RUNNER_OS
+          ブランチ: ${{ github.ref }}
+          コミットSHA: ${{ github.sha }}
+          処理内容: データセットAの処理完了
+          ステータス: ✓ 成功
+          EOF
+
+          cat output/result-a.txt
+
+          # 処理時間をシミュレート
+          sleep 5
+          echo "ジョブA完了!"
+        shell: bash
+
+      # Step 3: Pythonスクリプトの実行
+      - name: "Python解析スクリプト実行"
+        run: python scripts/analyze.py --job-name "JobA" --output output/analysis-a.json
+
+      # Step 4: カスタムActionの使用
+      - name: "カスタムAction実行"
+        uses: ./.github/actions/custom-action
+        with:
+          job-name: "Job-A"
+          message: "並列処理Aからのメッセージ"
+
+      # Step 5: アーティファクトのアップロード（公式Action使用）
+      - name: "結果をアーティファクトとして保存"
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-a-results
+          path: output/
+          retention-days: 30
+
+  # ジョブ2: 並列実行される処理B
+  parallel-job-b:
+    name: "並列ジョブB - Windows環境"
+    runs-on: windows-latest
+
+    steps:
+      - name: "チェックアウト"
+        uses: actions/checkout@v4
+
+      - name: "処理B - データ生成"
+        run: |
+          echo "=== ジョブB開始 ==="
+          echo "実行時刻: $(Get-Date)"
+          echo "ランナーOS: $env:RUNNER_OS"
+          echo "グローバル変数: $env:GLOBAL_VAR"
+
+          # 結果ファイルの作成
+          New-Item -ItemType Directory -Force -Path output
+
+          $result = @"
+          【ジョブB実行結果】
+          実行時刻: $(Get-Date)
+          ランナー: $env:RUNNER_OS
+          ブランチ: ${{ github.ref }}
+          コミットSHA: ${{ github.sha }}
+          処理内容: データセットBの処理完了
+          ステータス: ✓ 成功
+          "@
+
+          $result | Out-File -FilePath output/result-b.txt -Encoding UTF8
+          Get-Content output/result-b.txt
+
+          # 処理時間をシミュレート
+          Start-Sleep -Seconds 7
+          echo "ジョブB完了!"
+        shell: pwsh
+
+      - name: "PowerShellスクリプト実行"
+        run: |
+          python scripts/analyze.py --job-name "JobB" --output output/analysis-b.json
+        shell: pwsh
+
+      - name: "カスタムAction実行"
+        uses: ./.github/actions/custom-action
+        with:
+          job-name: "Job-B"
+          message: "並列処理Bからのメッセージ"
+
+      - name: "結果をアーティファクトとして保存"
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-b-results
+          path: output/
+          retention-days: 30
+
+  # ジョブ3: 並列実行される処理C
+  parallel-job-c:
+    name: "並列ジョブC - macOS環境"
+    runs-on: macos-latest
+
+    steps:
+      - name: "チェックアウト"
+        uses: actions/checkout@v4
+
+      - name: "処理C - データ生成"
+        run: |
+          echo "=== ジョブC開始 ==="
+          echo "実行時刻: $(date)"
+          echo "ランナーOS: $RUNNER_OS"
+          echo "グローバル変数: $GLOBAL_VAR"
+
+          # 結果ファイルの作成
+          mkdir -p output
+          cat > output/result-c.txt << EOF
+          【ジョブC実行結果】
+          実行時刻: $(date)
+          ランナー: $RUNNER_OS
+          ブランチ: ${{ github.ref }}
+          コミットSHA: ${{ github.sha }}
+          処理内容: データセットCの処理完了
+          ステータス: ✓ 成功
+          EOF
+
+          cat output/result-c.txt
+
+          # 処理時間をシミュレート
+          sleep 6
+          echo "ジョブC完了!"
+        shell: bash
+
+      - name: "Pythonスクリプト実行"
+        run: python3 scripts/analyze.py --job-name "JobC" --output output/analysis-c.json
+
+      - name: "カスタムAction実行"
+        uses: ./.github/actions/custom-action
+        with:
+          job-name: "Job-C"
+          message: "並列処理Cからのメッセージ"
+
+      - name: "結果をアーティファクトとして保存"
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-c-results
+          path: output/
+          retention-days: 30
+
+  # ジョブ4: 集約処理（並列ジョブの完了後に実行）
+  aggregate-results:
+    name: "結果の集約と最終レポート"
+    runs-on: ubuntu-latest
+    needs: [parallel-job-a, parallel-job-b, parallel-job-c]  # 依存関係の定義
+
+    steps:
+      - name: "チェックアウト"
+        uses: actions/checkout@v4
+
+      # 全てのアーティファクトをダウンロード
+      - name: "ジョブAの結果をダウンロード"
+        uses: actions/download-artifact@v4
+        with:
+          name: job-a-results
+          path: results/job-a
+
+      - name: "ジョブBの結果をダウンロード"
+        uses: actions/download-artifact@v4
+        with:
+          name: job-b-results
+          path: results/job-b
+
+      - name: "ジョブCの結果をダウンロード"
+        uses: actions/download-artifact@v4
+        with:
+          name: job-c-results
+          path: results/job-c
+
+      # 結果の集約
+      - name: "全結果の集約"
+        run: |
+          echo "=== 全ジョブの結果を集約 ==="
+          echo ""
+
+          mkdir -p final-output
+
+          # 最終レポートの作成
+          cat > final-output/final-report.txt << EOF
+          ╔════════════════════════════════════════════════════════╗
+          ║        GitHub Actions 並列処理実行レポート            ║
+          ╚════════════════════════════════════════════════════════╝
+
+          ワークフロー名: ${{ github.workflow }}
+          実行番号: ${{ github.run_number }}
+          実行ID: ${{ github.run_id }}
+          トリガーイベント: ${{ github.event_name }}
+          リポジトリ: ${{ github.repository }}
+          実行者: ${{ github.actor }}
+
+          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          【並列実行されたジョブ】
+          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+          EOF
+
+          # 各ジョブの結果を統合
+          echo "📋 ジョブA（Linux）の結果:" >> final-output/final-report.txt
+          cat results/job-a/result-a.txt >> final-output/final-report.txt
+          echo "" >> final-output/final-report.txt
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> final-output/final-report.txt
+
+          echo "📋 ジョブB（Windows）の結果:" >> final-output/final-report.txt
+          cat results/job-b/result-b.txt >> final-output/final-report.txt
+          echo "" >> final-output/final-report.txt
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> final-output/final-report.txt
+
+          echo "📋 ジョブC（macOS）の結果:" >> final-output/final-report.txt
+          cat results/job-c/result-c.txt >> final-output/final-report.txt
+          echo "" >> final-output/final-report.txt
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> final-output/final-report.txt
+
+          echo "" >> final-output/final-report.txt
+          echo "✅ 全ての並列ジョブが正常に完了しました！" >> final-output/final-report.txt
+          echo "完了時刻: $(date)" >> final-output/final-report.txt
+
+          # レポートの表示
+          cat final-output/final-report.txt
+
+          # 統計情報の生成
+          echo '{"total_jobs": 3, "status": "success", "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > final-output/statistics.json
+
+      - name: "最終レポートをアーティファクトとして保存"
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-report
+          path: final-output/
+          retention-days: 90
+
+      - name: "サマリーの作成"
+        run: |
+          echo "## 🎉 ワークフロー実行完了" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 実行結果" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ ジョブA（Linux）: 成功" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ ジョブB（Windows）: 成功" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ ジョブC（macOS）: 成功" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 アーティファクト" >> $GITHUB_STEP_SUMMARY
+          echo "- job-a-results" >> $GITHUB_STEP_SUMMARY
+          echo "- job-b-results" >> $GITHUB_STEP_SUMMARY
+          echo "- job-c-results" >> $GITHUB_STEP_SUMMARY
+          echo "- final-report（統合レポート）" >> $GITHUB_STEP_SUMMARY
+
