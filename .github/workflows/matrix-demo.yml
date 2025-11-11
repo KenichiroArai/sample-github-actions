@@ -211,14 +211,14 @@ jobs:
           html += "        </tr>\n"
 
           # 各OSの行を作成
-          for os in os_list:
-              os_display = os.replace('-latest', '')
+          for current_os in os_list:
+              os_display = current_os.replace('-latest', '')
               html += f"        <tr>\n            <td class='header-col'>{os_display}</td>\n"
 
               for py_ver in py_versions:
                   # この組み合わせの結果を検索
                   result = next((r for r in results
-                               if r['os'] == os and r['python_version'] == py_ver), None)
+                               if r['os'] == current_os and r['python_version'] == py_ver), None)
 
                   if result and result['status'] == 'success':
                       html += f"            <td class='success'>✅ 成功</td>\n"

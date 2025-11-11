@@ -16,13 +16,19 @@ if sys.stdout.encoding != 'utf-8':
 
 
 def main():
+    """
+    メイン実行関数
+
+    コマンドライン引数を解析し、ジョブデータの解析を実行して
+    結果をJSON形式で出力ファイルに保存します。
+    """
     parser = argparse.ArgumentParser(description='ジョブデータの解析')
     parser.add_argument('--job-name', required=True, help='ジョブ名')
     parser.add_argument('--output', required=True, help='出力ファイルパス')
     args = parser.parse_args()
 
     print("=" * 50)
-    print(f"🔍 解析スクリプト実行中...")
+    print("🔍 解析スクリプト実行中...")
     print("=" * 50)
     print(f"ジョブ名: {args.job_name}")
     print(f"出力先: {args.output}")
@@ -74,4 +80,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
