@@ -3,7 +3,7 @@ name: マトリックス戦略 - 並列処理デモ
 # マトリックス戦略を使用した並列実行のデモ
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
         # 3 OS × 4 Python = 12個のジョブが並列実行！
 
     steps:
@@ -35,6 +35,8 @@ jobs:
           python --version
           python -c "import sys; print(f'Python実行パス: {sys.executable}')"
           python -c "import platform; print(f'プラットフォーム: {platform.platform()}')"
+        env:
+          PYTHONIOENCODING: utf-8
 
       - name: "テスト実行"
         run: |
@@ -260,4 +262,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📊 レポート" >> $GITHUB_STEP_SUMMARY
           echo "詳細な実行マップは `matrix-execution-report` アーティファクトをダウンロードしてご確認ください。" >> $GITHUB_STEP_SUMMARY
-
