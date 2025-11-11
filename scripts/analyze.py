@@ -10,6 +10,10 @@ import datetime
 import os
 import sys
 
+# Windows環境でのUnicode出力対応
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+
 
 def main():
     parser = argparse.ArgumentParser(description='ジョブデータの解析')
